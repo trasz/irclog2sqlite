@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import calendar
-import codecs
 import sqlite3
 import sys
 import time
@@ -10,11 +9,15 @@ if len(sys.argv) != 3:
 	print "usage: " + sys.argv[0] + " file-name db-name"
 	sys.exit(1)
 
-f = codecs.open(sys.argv[1], 'r', 'utf8')
+f = open(sys.argv[1], 'r')
 db = sqlite3.connect(sys.argv[2])
 cursor = db.cursor()
 
-for l in f:
+while True:
+	l = f.readline()
+	if not l: # EOF
+		break
+
 	l = l.rstrip()
 	if not l: # Empty line.
 		continue;
@@ -54,8 +57,7 @@ for l in f:
 	prev_msgtime = msgtime
 	msgstr = " ".join(l.split()[1:])
 	#print time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, msgstr
-	cursor.execute('insert into irclogs values (?, ?, ?)', [time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, msgstr]);
-	db.commit()
+	cursor.execute('insert into irclogs values (?, ?, ?)', [time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, utf(msgstr)]);
 
 db.commit()
 
