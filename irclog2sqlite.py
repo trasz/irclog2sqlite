@@ -49,6 +49,7 @@ while True:
 	# 12:21 -!- jot [jceel@apcoh.org] has joined #gusta-muzyczne-milosnikow-bsd-i-open-source
 	if re.search(r"^..... -!- .* has joined", l):
 		(msgchan, dummy) = re.subn(r"^..... -!- .* has joined ", r"", l)
+		msgchan = msgchan.lower()
 		if prev_msgchan and msgchan != prev_msgchan:
 			print "ERROR: channel changed; was ", prev_msgchan, "; changed to ", msgchan
 			print "at line '", l, "'"
