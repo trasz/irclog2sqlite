@@ -57,7 +57,7 @@ while True:
 	prev_msgtime = msgtime
 	msgstr = " ".join(l.split()[1:])
 	#print time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, msgstr
-	cursor.execute('insert into irclogs values (?, ?, ?)', [time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, utf(msgstr)]);
+	cursor.execute('insert into irclogs values (?, ?, ?)', [time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, unicode(msgstr, 'utf8', errors = 'replace')]);
 
 db.commit()
 
