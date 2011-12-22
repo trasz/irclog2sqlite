@@ -74,6 +74,8 @@ while True:
 		if l.startswith("--- Log closed"):
 			timestr = " ".join(l.split()[3:])
 			closed_at = calendar.timegm(time.strptime(timestr))
+			if (closed_at < prev_entry_time):
+				raise Exception("message after log closing time; closed at " + time2str(closed_at) + ", last message " + time2str(prev_entry_time))
 			log_closed(chunk_id, closed_at)
 			del opened_at
 			del opened_date
@@ -95,6 +97,9 @@ while True:
 		t = time.strptime(timestr, "%H:%M")
 
 		entry_time = opened_date + (t.tm_hour * 60 + t.tm_min) * 60 
+		# + 60, because opened_at is at second resolution, and entry_time is rounded down to minutes.
+		if entry_time + 60 < opened_at:
+			raise Exception("message before log opening time; opened at " + time2str(opened_at) + ", now " + time2str(entry_time))
 		if entry_time < prev_entry_time:
 			raise Exception("time going backwards; previously " + time2str(prev_entry_time) + ", now " + time2str(entry_time))
 		if entry_time == prev_entry_time:
