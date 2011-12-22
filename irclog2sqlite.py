@@ -1,25 +1,42 @@
 #!/usr/bin/env python
 
-# create table irclogs (channel text, time timestamp, seq integer, line text);
+# create table chunks (id int primary key, channel text, imported_from text, imported_at timestamp, imported_by text);
+# create table entries (chunk_id int references chunks(id), time timestamp, seq integer, line text);
 
 import calendar
+import os
 import re
 import sqlite3
 import sys
 import time
+
+def time2str(s):
+	return time.strftime("%Y-%m-%d %H:%M", time.gmtime(s))
+
+def create_chunk(ch):
+	cursor.execute('insert into chunks (channel, imported_from, imported_at, imported_by) values (?, ?, ?, ?)', [ch, filename, imported_at, imported_by])
+	return cursor.lastrowid
 
 if len(sys.argv) != 3:
 	print "usage: " + sys.argv[0] + " irclog-path db-path"
 	sys.exit(1)
 
 # We cannot use codecs.open() here instead, as it seems to split lines on invalid UTF-8 sequences.
-filename = sys.argv[1]
+filename = os.path.abspath(sys.argv[1])
 f = open(filename, 'r')
 db = sqlite3.connect(sys.argv[2])
 cursor = db.cursor()
-prev_msgtime = 0
-prev_msgchan = ""
+prev_entry_time = 0
+prev_channel = ""
 lineno = 1
+imported_by = os.getlogin() + "@" + os.uname()[1]
+imported_at = time.ctime()
+
+try:
+	cursor.execute('create table chunks (id integer primary key autoincrement, channel text not null, imported_from text not null, imported_at timestamp not null, imported_by text not null)')
+	cursor.execute('create table entries (chunk_id integer, time timestamp not null, seq integer not null, line text not null, foreign key(chunk_id) references chunks(id))')
+except:
+	pass
 
 while True:
 	l = f.readline()
@@ -37,8 +54,8 @@ while True:
 			# We are only interested in date here; subsequent calculations depend on hour and minute being 0.
 			s = l.split()
 			timestr = s[4] + " " + s[5] + " " + s[7]
-			opened_at = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
 			# The 'opened_at' variable contains log open time, in seconds since epoch.
+			opened_at = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
 			continue
 
 		if l.startswith("--- Day changed"):
@@ -49,32 +66,35 @@ while True:
 
 		if l.startswith("--- Log closed"):
 			del opened_at
+			del chunk_id
+			prev_channel = ""
 			continue
 
-		# 12:21 -!- jot [jceel@apcoh.org] has joined #gusta-muzyczne-milosnikow-bsd-i-open-source
 		if re.search(r"^..... -!- .* has joined", l):
-			(msgchan, dummy) = re.subn(r"^..... -!- .* has joined ", r"", l)
-			msgchan = msgchan.lower()
-			if prev_msgchan and msgchan != prev_msgchan:
-				raise Exception("channel changed; was " + prev_msgchan + "; changed to " + msgchan)
-			prev_msgchan = msgchan
+			(channel, dummy) = re.subn(r"^..... -!- .* has joined ", r"", l)
+			channel = channel.lower()
+			if not prev_channel:
+				chunk_id = create_chunk(channel)
+			elif channel != prev_channel:
+				raise Exception("channel changed; was " + prev_channel + "; changed to " + channel)
+			prev_channel = channel
 
 		timestr = l.split()[0]
 		t = time.strptime(timestr, "%H:%M")
 
-		msgtime = opened_at + (t.tm_hour * 60 + t.tm_min) * 60 
-		if msgtime < prev_msgtime:
-			raise Exception("time going backwards; previously " + time.strftime("%Y-%m-%d %H:%M", time.gmtime(prev_msgtime)) + ", now " + time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)))
-		if msgtime == prev_msgtime:
-			msgseq += 1
+		entry_time = opened_at + (t.tm_hour * 60 + t.tm_min) * 60 
+		if entry_time < prev_entry_time:
+			raise Exception("time going backwards; previously " + time2str(prev_entry_time) + ", now " + time2str(entry_time))
+		if entry_time == prev_entry_time:
+			entry_seq += 1
 		else:
-			msgseq = 0
-		prev_msgtime = msgtime
-		msgstr = " ".join(l.split()[1:])
-		#print time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, msgstr
-		cursor.execute('insert into irclogs (channel, time, seq, line) values (?, ?, ?, ?)', [msgchan, time.strftime("%Y-%m-%d %H:%M", time.gmtime(msgtime)), msgseq, unicode(msgstr, 'utf8', errors = 'replace')]);
+			entry_seq = 0
+		prev_entry_time = entry_time
+		entry_line = unicode(" ".join(l.split()[1:]), 'utf8', errors = 'replace')
+		cursor.execute('insert into entries (chunk_id, time, seq, line) values (?, ?, ?, ?)', [chunk_id, time2str(entry_time), entry_seq, entry_line])
 	except:
-		print "Problematic line in " + filename + ", line " + str(lineno) + ": " + l
+		print "\nProblematic line in " + filename + ", line " + str(lineno) + ":\n" + l + "\n"
+		db.rollback()
 		raise
 
 db.commit()
