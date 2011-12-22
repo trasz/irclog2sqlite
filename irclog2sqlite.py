@@ -36,6 +36,7 @@ prev_channel = ""
 lineno = 1
 imported_by = os.getlogin() + "@" + os.uname()[1]
 imported_at = time.ctime()
+opened = False
 
 try:
 	cursor.execute('create table chunks (id integer primary key autoincrement, channel text not null, opened_at timestamp not null, closed_at timestamp, imported_from text not null, imported_at timestamp not null, imported_by text not null, unique (channel, opened_at, closed_at))')
@@ -43,19 +44,25 @@ try:
 except:
 	pass
 
-while True:
-	l = f.readline()
-	if not l: # EOF
-		break
+try:
+	while True:
+		l = f.readline()
+		if not l: # EOF
+			break
 
-	lineno += 1
+		lineno += 1
 
-	l = l.rstrip()
-	if not l: # Empty line.
-		continue
+		l = l.rstrip()
+		if not l: # Empty line.
+			continue
 
-	try:
 		if l.startswith("--- Log opened"):
+			if opened:
+				#raise Exception("log already opened at " + time2str(opened_at))
+				print "missing close for a log opened at " + time2str(opened_at) + "; closing at " + time2str(prev_entry_time)
+				log_closed(chunk_id, prev_entry_time)
+				del chunk_id
+
 			timestr = " ".join(l.split()[3:])
 			opened_at = calendar.timegm(time.strptime(timestr))
 
@@ -63,15 +70,21 @@ while True:
 			s = l.split()
 			timestr = s[4] + " " + s[5] + " " + s[7]
 			opened_date = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
+			prev_channel = ""
+			opened = True
 			continue
 
 		if l.startswith("--- Day changed"):
+			if not opened:
+				raise Exception("changing day with log closed")
 			s = l.split()
 			timestr = s[4] + " " + s[5] + " " + s[6]
 			opened_date = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
 			continue
 
 		if l.startswith("--- Log closed"):
+			if not opened:
+				raise Exception("closing closed log")
 			timestr = " ".join(l.split()[3:])
 			closed_at = calendar.timegm(time.strptime(timestr))
 			if (closed_at < prev_entry_time):
@@ -81,8 +94,11 @@ while True:
 			del opened_date
 			del closed_at
 			del chunk_id
-			prev_channel = ""
+			opened = False;
 			continue
+
+		if not opened:
+			raise Exception("log not opened")
 
 		if re.search(r"^..... -!- .* has joined", l):
 			(channel, dummy) = re.subn(r"^..... -!- .* has joined ", r"", l)
@@ -109,10 +125,15 @@ while True:
 		prev_entry_time = entry_time
 		entry_line = unicode(" ".join(l.split()[1:]), 'utf8', errors = 'replace')
 		cursor.execute('insert into entries (chunk_id, time, seq, line) values (?, ?, ?, ?)', [chunk_id, time2str(entry_time), entry_seq, entry_line])
-	except:
-		print "\nProblematic line in " + filename + ", line " + str(lineno) + ":\n" + l + "\n"
-		db.rollback()
-		raise
+
+	if opened:
+		print "missing close at EOF for a log opened at " + time2str(opened_at) + "; closing at " + time2str(prev_entry_time)
+		log_closed(chunk_id, prev_entry_time)
+
+except:
+	print "\nProblematic line in " + filename + ", line " + str(lineno) + ":\n" + l + "\n"
+	db.rollback()
+	raise
 
 db.commit()
 
