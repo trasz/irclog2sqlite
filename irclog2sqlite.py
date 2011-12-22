@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-# create table chunks (id int primary key, channel text, imported_from text, imported_at timestamp, imported_by text);
-# create table entries (chunk_id int references chunks(id), time timestamp, seq integer, line text);
-
 import calendar
 import os
 import re
@@ -11,13 +8,14 @@ import sys
 import time
 
 def time2str(s):
-	return time.strftime("%Y-%m-%d %H:%M", time.gmtime(s))
+	return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(s))
 
 def log_opened(ch, opened_at):
 	cursor.execute('insert into chunks (channel, opened_at, imported_from, imported_at, imported_by) values (?, ?, ?, ?, ?)', [ch, time2str(opened_at), filename, imported_at, imported_by])
 	return cursor.lastrowid
 
 def log_closed(chunk_id, closed_at):
+	# XXX: Make sure we don't overlap with some existing chunk.
 	cursor.execute('update chunks set closed_at = ? where id = ?', [time2str(closed_at), chunk_id])
 	if cursor.rowcount != 1:
 		raise Exception("weird number of rows affected: was " + str(cursor.rowcount) + ", should be 1")
