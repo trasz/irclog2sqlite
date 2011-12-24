@@ -15,7 +15,14 @@ def log_opened(ch, opened_at):
 	return cursor.lastrowid
 
 def log_closed(chunk_id, closed_at):
-	# XXX: Make sure we don't overlap with some existing chunk.
+	if opened_at > closed_at:
+		raise Exception("closed before open: opened at " + time2str(opened_at) + ", closed at " + time2str(closed_at))
+	# Make sure the new chunk doesn't overlap with the existing ones.
+	cursor.execute('select opened_at, closed_at, imported_from, imported_at, imported_by from chunks where channel = ? and opened_at <= ? and closed_at >= ?', [channel, time2str(opened_at), time2str(closed_at)])
+	result = cursor.fetchone()
+	if result:
+		raise Exception("time range between " + time2str(opened_at) + " and " + time2str(closed_at) + " overlaps with log opened at " + result[0] + ", closed at " + result[1] + ", imported from " + result[2] + " at " + result[3] + " by " + result[4])
+
 	cursor.execute('update chunks set closed_at = ? where id = ?', [time2str(closed_at), chunk_id])
 	if cursor.rowcount != 1:
 		raise Exception("weird number of rows affected: was " + str(cursor.rowcount) + ", should be 1")
@@ -111,9 +118,12 @@ try:
 		t = time.strptime(timestr, "%H:%M")
 
 		entry_time = opened_date + (t.tm_hour * 60 + t.tm_min) * 60 
-		# + 60, because opened_at is at second resolution, and entry_time is rounded down to minutes.
-		if entry_time + 60 < opened_at:
-			raise Exception("message before log opening time; opened at " + time2str(opened_at) + ", now " + time2str(entry_time))
+		if entry_time < opened_at:
+			# + 60, because opened_at is at second resolution, and entry_time is rounded down to minutes.
+			if entry_time + 60 >= opened_at:
+				entry_time = opened_at
+			else:
+				raise Exception("message before log opening time; opened at " + time2str(opened_at) + ", now " + time2str(entry_time))
 		if entry_time < prev_entry_time:
 			raise Exception("time going backwards; previously " + time2str(prev_entry_time) + ", now " + time2str(entry_time))
 		if entry_time == prev_entry_time:
