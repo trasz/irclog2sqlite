@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import calendar
 import os
 import re
 import sqlite3
@@ -69,12 +68,12 @@ try:
 				del chunk_id
 
 			timestr = " ".join(l.split()[3:])
-			opened_at = calendar.timegm(time.strptime(timestr))
+			opened_at = time.mktime(time.strptime(timestr))
 
 			# Subsequent calculations depend on hour and minute being 0.
 			s = l.split()
 			timestr = s[4] + " " + s[5] + " " + s[7]
-			opened_date = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
+			opened_date = time.mktime(time.strptime(timestr, "%b %d %Y"))
 			prev_channel = ""
 			opened = True
 			continue
@@ -84,14 +83,14 @@ try:
 				raise Exception("changing day with log closed")
 			s = l.split()
 			timestr = s[4] + " " + s[5] + " " + s[6]
-			opened_date = calendar.timegm(time.strptime(timestr, "%b %d %Y"))
+			opened_date = time.mktime(time.strptime(timestr, "%b %d %Y"))
 			continue
 
 		if l.startswith("--- Log closed"):
 			if not opened:
 				raise Exception("closing closed log")
 			timestr = " ".join(l.split()[3:])
-			closed_at = calendar.timegm(time.strptime(timestr))
+			closed_at = time.mktime(time.strptime(timestr))
 			if (closed_at < prev_entry_time):
 				raise Exception("message after log closing time; closed at " + time2str(closed_at) + ", last message " + time2str(prev_entry_time))
 			log_closed(chunk_id, closed_at)
