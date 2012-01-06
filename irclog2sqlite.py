@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# TODO: handle time zone changes.
+
 import os
 import re
 import sqlite3
